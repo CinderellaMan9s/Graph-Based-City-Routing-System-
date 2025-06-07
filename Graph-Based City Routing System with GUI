@@ -1,0 +1,172 @@
+try:
+    import heapq
+    from collections import deque
+    import networkx as nx
+    import matplotlib.pyplot as plt
+    import tkinter as tk
+    from tkinter import simpledialog, messagebox
+except ModuleNotFoundError as e:
+    print("Required modules missing. Please ensure heapq, collections, networkx, matplotlib, and tkinter are available.")
+    raise e
+
+class Graph:
+    def __init__(self):
+        self.adj_list = {}  # {node: [(neighbor, weight), ...]}
+
+    def add_node(self, city):
+        if city not in self.adj_list:
+            self.adj_list[city] = []
+
+    def add_edge(self, from_city, to_city, weight=1):
+        self.add_node(from_city)
+        self.add_node(to_city)
+        self.adj_list[from_city].append((to_city, weight))
+        self.adj_list[to_city].append((from_city, weight))  # Undirected
+
+    def update_edge(self, from_city, to_city, weight):
+        self.remove_edge(from_city, to_city)
+        self.add_edge(from_city, to_city, weight)
+
+    def display_graph(self):
+        print("\nCurrent Graph:")
+        for city in self.adj_list:
+            connections = ", ".join([f"{neighbor}({weight})" for neighbor, weight in self.adj_list[city]])
+            print(f"{city} -> {connections}")
+
+    def remove_node(self, city):
+        if city in self.adj_list:
+            del self.adj_list[city]
+        for neighbors in self.adj_list.values():
+            neighbors[:] = [(n, w) for n, w in neighbors if n != city]
+
+    def remove_edge(self, from_city, to_city):
+        self.adj_list[from_city] = [(n, w) for n, w in self.adj_list[from_city] if n != to_city]
+        self.adj_list[to_city] = [(n, w) for n, w in self.adj_list[to_city] if n != from_city]
+
+    def dijkstra(self, start, end):
+        distances = {city: float('inf') for city in self.adj_list}
+        distances[start] = 0
+        prev = {city: None for city in self.adj_list}
+        queue = [(0, start)]
+
+        while queue:
+            curr_dist, curr_city = heapq.heappop(queue)
+            if curr_city == end:
+                break
+            for neighbor, weight in self.adj_list[curr_city]:
+                distance = curr_dist + weight
+                if distance < distances[neighbor]:
+                    distances[neighbor] = distance
+                    prev[neighbor] = curr_city
+                    heapq.heappush(queue, (distance, neighbor))
+
+        path = []
+        crawl = end
+        while crawl:
+            path.insert(0, crawl)
+            crawl = prev[crawl]
+
+        return path, distances[end] if distances[end] != float('inf') else None
+
+    def bfs(self, start, end):
+        visited = {city: False for city in self.adj_list}
+        prev = {city: None for city in self.adj_list}
+        queue = deque([start])
+        visited[start] = True
+
+        while queue:
+            city = queue.popleft()
+            if city == end:
+                break
+            for neighbor, _ in self.adj_list[city]:
+                if not visited[neighbor]:
+                    visited[neighbor] = True
+                    prev[neighbor] = city
+                    queue.append(neighbor)
+
+        path = []
+        crawl = end
+        while crawl:
+            path.insert(0, crawl)
+            crawl = prev[crawl]
+
+        return path if path[0] == start else None
+
+    def visualize_graph(self):
+        G = nx.Graph()
+        for city in self.adj_list:
+            for neighbor, weight in self.adj_list[city]:
+                G.add_edge(city, neighbor, weight=weight)
+        pos = nx.spring_layout(G)
+        edge_labels = nx.get_edge_attributes(G, 'weight')
+        nx.draw(G, pos, with_labels=True, node_color='skyblue', node_size=2000, font_size=12, font_weight='bold')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+        plt.title("City Network Graph")
+        plt.show()
+
+def gui_mode(graph):
+    root = tk.Tk()
+    root.withdraw()
+
+    while True:
+        option = simpledialog.askstring("Menu", "Choose option:\n1. Add Edge\n2. Find Shortest Path (Dijkstra)\n3. Find Shortest Path (BFS)\n4. Visualize Graph\n5. Exit")
+        if option == '1':
+            u = simpledialog.askstring("City 1", "Enter from city:")
+            v = simpledialog.askstring("City 2", "Enter to city:")
+            w = simpledialog.askinteger("Weight", "Enter weight:")
+            graph.add_edge(u, v, w)
+        elif option == '2':
+            start = simpledialog.askstring("Start City", "From:")
+            end = simpledialog.askstring("End City", "To:")
+            path, dist = graph.dijkstra(start, end)
+            if path:
+                messagebox.showinfo("Result", f"Path: {' -> '.join(path)}\nDistance: {dist}")
+            else:
+                messagebox.showinfo("Result", "No path found")
+        elif option == '3':
+            start = simpledialog.askstring("Start City", "From:")
+            end = simpledialog.askstring("End City", "To:")
+            path = graph.bfs(start, end)
+            if path:
+                messagebox.showinfo("Result", f"Path: {' -> '.join(path)}")
+            else:
+                messagebox.showinfo("Result", "No path found")
+        elif option == '4':
+            graph.visualize_graph()
+        elif option == '5':
+            break
+        else:
+            messagebox.showinfo("Error", "Invalid option")
+
+
+def main():
+    g = Graph()
+    g.add_edge("Hyderabad", "Delhi", 10)
+    g.add_edge("Hyderabad", "Mumbai", 5)
+    g.add_edge("Delhi", "Mumbai", 2)
+    g.add_edge("Delhi", "Chennai", 15)
+
+    g.display_graph()
+
+    print("\n--- Weighted (Dijkstra's Algorithm) ---")
+    path, dist = g.dijkstra("Hyderabad", "Chennai")
+    if path:
+        print(f"Path: {' -> '.join(path)}, Distance: {dist}")
+    else:
+        print("No path found using Dijkstra")
+
+    print("\n--- Unweighted (BFS) ---")
+    path_bfs = g.bfs("Hyderabad", "Chennai")
+    if path_bfs:
+        print(f"Path: {' -> '.join(path_bfs)}")
+    else:
+        print("No path found using BFS")
+
+    # Optional but epic: Visualize the network
+    g.visualize_graph()
+
+    # Launch GUI Mode
+    gui_mode(g)
+
+if __name__ == '__main__':
+    main()
