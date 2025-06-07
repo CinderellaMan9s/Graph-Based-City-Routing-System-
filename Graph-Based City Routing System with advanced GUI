@@ -1,0 +1,220 @@
+import heapq
+from collections import deque
+import networkx as nx
+import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+class Graph:
+    def __init__(self):
+        self.adj_list = {}  # {node: [(neighbor, weight), ...]}
+
+    def add_node(self, city):
+        if city not in self.adj_list:
+            self.adj_list[city] = []
+
+    def add_edge(self, from_city, to_city, weight=1):
+        self.add_node(from_city)
+        self.add_node(to_city)
+        self.adj_list[from_city].append((to_city, weight))
+        self.adj_list[to_city].append((from_city, weight))  # Undirected
+
+    def update_edge(self, from_city, to_city, weight):
+        self.remove_edge(from_city, to_city)
+        self.add_edge(from_city, to_city, weight)
+
+    def remove_node(self, city):
+        if city in self.adj_list:
+            del self.adj_list[city]
+        for neighbors in self.adj_list.values():
+            neighbors[:] = [(n, w) for n, w in neighbors if n != city]
+
+    def remove_edge(self, from_city, to_city):
+        if from_city in self.adj_list:
+            self.adj_list[from_city] = [(n, w) for n, w in self.adj_list[from_city] if n != to_city]
+        if to_city in self.adj_list:
+            self.adj_list[to_city] = [(n, w) for n, w in self.adj_list[to_city] if n != from_city]
+
+    def dijkstra(self, start, end):
+        if start not in self.adj_list or end not in self.adj_list:
+            return None, None
+        distances = {city: float('inf') for city in self.adj_list}
+        distances[start] = 0
+        prev = {city: None for city in self.adj_list}
+        queue = [(0, start)]
+
+        while queue:
+            curr_dist, curr_city = heapq.heappop(queue)
+            if curr_city == end:
+                break
+            for neighbor, weight in self.adj_list[curr_city]:
+                distance = curr_dist + weight
+                if distance < distances[neighbor]:
+                    distances[neighbor] = distance
+                    prev[neighbor] = curr_city
+                    heapq.heappush(queue, (distance, neighbor))
+
+        path = []
+        crawl = end
+        while crawl:
+            path.insert(0, crawl)
+            crawl = prev[crawl]
+
+        return path, distances[end] if distances[end] != float('inf') else None
+
+    def bfs(self, start, end):
+        if start not in self.adj_list or end not in self.adj_list:
+            return None
+        visited = {city: False for city in self.adj_list}
+        prev = {city: None for city in self.adj_list}
+        queue = deque([start])
+        visited[start] = True
+
+        while queue:
+            city = queue.popleft()
+            if city == end:
+                break
+            for neighbor, _ in self.adj_list[city]:
+                if not visited[neighbor]:
+                    visited[neighbor] = True
+                    prev[neighbor] = city
+                    queue.append(neighbor)
+
+        path = []
+        crawl = end
+        while crawl:
+            path.insert(0, crawl)
+            crawl = prev[crawl]
+
+        return path if path and path[0] == start else None
+
+    def visualize_graph(self):
+        G = nx.Graph()
+        for city in self.adj_list:
+            for neighbor, weight in self.adj_list[city]:
+                G.add_edge(city, neighbor, weight=weight)
+        pos = nx.spring_layout(G)
+        edge_labels = nx.get_edge_attributes(G, 'weight')
+        nx.draw(G, pos, with_labels=True, node_color='skyblue', node_size=2000, font_size=12, font_weight='bold')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+        plt.title("City Network Graph")
+        plt.show()
+
+class RoutePlannerApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Route Planner System")
+        self.geometry("600x500")
+        self.graph = Graph()
+
+        # UI Elements
+        self.create_widgets()
+
+    def create_widgets(self):
+        # City input frame
+        city_frame = ttk.LabelFrame(self, text="Add City & Edge")
+        city_frame.pack(fill="x", padx=10, pady=10)
+
+        ttk.Label(city_frame, text="From City:").grid(row=0, column=0, padx=5, pady=5)
+        self.from_city_entry = ttk.Entry(city_frame)
+        self.from_city_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(city_frame, text="To City:").grid(row=1, column=0, padx=5, pady=5)
+        self.to_city_entry = ttk.Entry(city_frame)
+        self.to_city_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        ttk.Label(city_frame, text="Distance (Weight):").grid(row=2, column=0, padx=5, pady=5)
+        self.weight_entry = ttk.Entry(city_frame)
+        self.weight_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        add_edge_btn = ttk.Button(city_frame, text="Add Edge", command=self.add_edge)
+        add_edge_btn.grid(row=3, column=0, columnspan=2, pady=10)
+
+        # Path query frame
+        path_frame = ttk.LabelFrame(self, text="Find Shortest Path")
+        path_frame.pack(fill="x", padx=10, pady=10)
+
+        ttk.Label(path_frame, text="Start City:").grid(row=0, column=0, padx=5, pady=5)
+        self.start_city_combo = ttk.Combobox(path_frame, values=[], state="readonly")
+        self.start_city_combo.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(path_frame, text="End City:").grid(row=1, column=0, padx=5, pady=5)
+        self.end_city_combo = ttk.Combobox(path_frame, values=[], state="readonly")
+        self.end_city_combo.grid(row=1, column=1, padx=5, pady=5)
+
+        dijkstra_btn = ttk.Button(path_frame, text="Find Path (Dijkstra)", command=self.find_dijkstra_path)
+        dijkstra_btn.grid(row=2, column=0, columnspan=2, pady=5)
+
+        bfs_btn = ttk.Button(path_frame, text="Find Path (BFS - Unweighted)", command=self.find_bfs_path)
+        bfs_btn.grid(row=3, column=0, columnspan=2, pady=5)
+
+        # Output Text
+        output_frame = ttk.LabelFrame(self, text="Output")
+        output_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        self.output_text = tk.Text(output_frame, height=10, wrap="word")
+        self.output_text.pack(fill="both", expand=True)
+
+        # Visualize button
+        vis_btn = ttk.Button(self, text="Visualize Graph", command=self.graph.visualize_graph)
+        vis_btn.pack(pady=10)
+
+    def add_edge(self):
+        from_city = self.from_city_entry.get().strip()
+        to_city = self.to_city_entry.get().strip()
+        weight = self.weight_entry.get().strip()
+
+        if not from_city or not to_city or not weight:
+            messagebox.showerror("Error", "Please enter From City, To City, and Distance")
+            return
+
+        try:
+            weight_val = float(weight)
+            if weight_val <= 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Error", "Distance must be a positive number")
+            return
+
+        self.graph.add_edge(from_city, to_city, weight_val)
+        self.output_text.insert(tk.END, f"Added edge: {from_city} <-> {to_city} with distance {weight_val}\n")
+        self.update_city_combos()
+        self.clear_entries()
+
+    def update_city_combos(self):
+        cities = sorted(self.graph.adj_list.keys())
+        self.start_city_combo['values'] = cities
+        self.end_city_combo['values'] = cities
+
+    def clear_entries(self):
+        self.from_city_entry.delete(0, tk.END)
+        self.to_city_entry.delete(0, tk.END)
+        self.weight_entry.delete(0, tk.END)
+
+    def find_dijkstra_path(self):
+        start = self.start_city_combo.get()
+        end = self.end_city_combo.get()
+        if not start or not end:
+            messagebox.showerror("Error", "Select both Start and End cities")
+            return
+        path, dist = self.graph.dijkstra(start, end)
+        if path and dist is not None:
+            self.output_text.insert(tk.END, f"Dijkstra Path: {' -> '.join(path)} (Distance: {dist})\n")
+        else:
+            self.output_text.insert(tk.END, "No path found using Dijkstra\n")
+
+    def find_bfs_path(self):
+        start = self.start_city_combo.get()
+        end = self.end_city_combo.get()
+        if not start or not end:
+            messagebox.showerror("Error", "Select both Start and End cities")
+            return
+        path = self.graph.bfs(start, end)
+        if path:
+            self.output_text.insert(tk.END, f"BFS Path: {' -> '.join(path)}\n")
+        else:
+            self.output_text.insert(tk.END, "No path found using BFS\n")
+
+if __name__ == '__main__':
+    app = RoutePlannerApp()
+    app.mainloop()
